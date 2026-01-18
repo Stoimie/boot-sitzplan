@@ -335,6 +335,59 @@
             text-shadow: 0 1px 2px rgba(0,0,0,0.8);
             font-weight: 900;
         }
+
+        /* --- MODERNE BUTTONS --- */
+        .modern-btn {
+            width: 100%;
+            padding: 12px 20px;
+            margin-bottom: 12px;
+            border: none;
+            border-radius: 50px; /* "Pill"-Shape für modernen Look */
+            
+            font-size: 13px;
+            font-weight: bold;
+            color: white;
+            text-transform: uppercase; /* Alles Großbuchstaben wirkt aufgeräumter */
+            letter-spacing: 0.5px;
+            
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); /* Weicher Schatten */
+            transition: all 0.3s ease; /* Sanfte Animation */
+            
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px; /* Abstand zwischen Icon und Text */
+        }
+
+        /* Hover-Effekt: Button schwebt hoch */
+        .modern-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+
+        /* Klick-Effekt: Button drückt sich rein */
+        .modern-btn:active {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        /* --- DIE FARB-VARIANTEN (Verläufe) --- */
+        
+        /* Blau/Lila für Drucken */
+        .btn-print {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        /* Frisches Grün für Excel */
+        .btn-excel {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        /* Warnendes Rot/Orange für Löschen */
+        .btn-reset {
+            background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+        }
     </style>
 </head>
 <body>
@@ -359,17 +412,20 @@
         
         <div id="guest-pool"></div>
 
-        <div style="margin-top: 20px; text-align: center; border-top: 1px solid #ccc; padding-top: 15px;">
-            <button onclick="printList()" style="background: #1976d2; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%; margin-bottom: 10px;">
-                🖨️ Liste Drucken (PDF)
+        <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
+            
+            <button onclick="printList()" class="modern-btn btn-print">
+                <span>🖨️</span> Drucken (PDF)
             </button>
             
-            <button id="export-excel-btn" style="background: #2e7d32; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%; margin-bottom: 10px;">
-                💾 Export als Excel (.xlsx)
+            <button id="export-excel-btn" class="modern-btn btn-excel">
+                <span>💾</span> Excel Export
             </button>
-            <button id="reset-btn" style="background: #d32f2f; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%;">
-                ⚠️ Plan komplett löschen
+
+            <button id="reset-btn" class="modern-btn btn-reset">
+                <span>🗑️</span> Alles Löschen
             </button>
+            
         </div>
     </div>
 
