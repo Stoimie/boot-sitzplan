@@ -388,6 +388,51 @@
         .btn-reset {
             background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
         }
+
+        /* --- KONTEXT-MENÜ DESIGN --- */
+        .context-menu {
+            display: none;
+            position: absolute;
+            z-index: 10000;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            padding: 6px 0;
+            min-width: 180px;
+            border: 1px solid #ddd;
+            font-size: 13px;
+            color: #333;
+        }
+        .menu-item { padding: 8px 16px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .menu-item:hover { background-color: #f5f5f5; }
+        .menu-item.delete:hover { background-color: #ffebee; color: #d32f2f; }
+        .menu-divider { height: 1px; background-color: #eee; margin: 4px 0; }
+
+        /* --- GESPERRTER TISCH (GRAU & SCHLOSS) --- */
+        .table.locked {
+            border: 2px dashed #999 !important; /* Gestrichelter Rand */
+            background-color: rgba(220, 220, 220, 0.3) !important; /* Leicht ausgegraut */
+        }
+        
+        /* Das Schloss-Icon am Tischrand */
+        .table.locked::after {
+            content: '🔒';
+            position: absolute;
+            top: 0px;
+            right: 0px;
+            font-size: 12px;
+            background: white;
+            border-radius: 50%;
+            padding: 2px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            pointer-events: none;
+        }
+
+        /* Inhalt verblasst etwas, wenn gesperrt */
+        .table.locked .seat-container {
+            opacity: 0.6;
+            pointer-events: none; /* Verhindert Klicks auf die Gäste */
+        }
     </style>
 </head>
 <body>
@@ -446,6 +491,18 @@
             <div class="table" id="t1" data-max="8"><div class="table-title">Tisch 1</div><div class="seat-counter">0/8</div><div class="seat-container"></div></div>
             <div class="table" id="t2" data-max="8"><div class="table-title">Tisch 2</div><div class="seat-counter">0/8</div><div class="seat-container"></div></div>
         </div>
+    </div>
+
+    <div id="context-menu" class="context-menu">
+        <div id="guest-options">
+            <div class="menu-item" id="ctx-edit-name">✏️ Namen bearbeiten</div>
+            <div class="menu-item" id="ctx-edit-company">🏢 Firma ändern</div>
+            <div class="menu-divider"></div>
+            <div class="menu-item delete" id="ctx-remove">❌ Vom Tisch nehmen</div>
+            <div class="menu-divider"></div>
+        </div>
+        
+        <div class="menu-item" id="ctx-lock-toggle">🔒 Tisch sperren</div>
     </div>
 
     <script>
@@ -590,6 +647,11 @@
 
         containers.forEach(container => {
             container.addEventListener('dragover', e => {
+
+                // --- NEU: STOPP BEI GESPERRTEN TISCHEN ---
+                if (container.parentElement.classList.contains('locked')) return;
+                // ------------------------------------------
+
                 if (container.id === 'guest-pool') {
                     e.preventDefault();
                     const draggable = document.querySelector('.dragging');
@@ -607,15 +669,126 @@
             });
         });
 
+        /* --- HAUPT-LOGIK: MENÜ & SPERREN --- */
+        const contextMenu = document.getElementById('context-menu');
+        const guestOptions = document.getElementById('guest-options');
+        const lockBtn = document.getElementById('ctx-lock-toggle');
+        
+        let currentContextObj = null; // Speichert, worauf wir geklickt haben
+
+        // 1. RECHTSKLICK (Öffnet Menü)
+        document.addEventListener('contextmenu', (e) => {
+            const table = e.target.closest('.table');
+            const guest = e.target.closest('.guest-on-table');
+            
+            // Menü nur zeigen, wenn wir auf einem Tisch sind
+            if (table) {
+                e.preventDefault();
+                contextMenu.style.top = `${e.pageY}px`;
+                contextMenu.style.left = `${e.pageX}px`;
+                contextMenu.style.display = 'block';
+
+                currentContextObj = { table: table, guest: guest };
+                const isLocked = table.classList.contains('locked');
+
+                // Menü anpassen: Ist der Tisch gesperrt?
+                if (isLocked) {
+                    lockBtn.innerText = "🔓 Tisch entsperren";
+                    if(guestOptions) guestOptions.style.display = 'none'; // Keine Bearbeitung möglich
+                } else {
+                    lockBtn.innerText = "🔒 Tisch sperren";
+                    // Gast-Optionen nur zeigen, wenn wir auch einen Gast getroffen haben
+                    if(guestOptions) guestOptions.style.display = guest ? 'block' : 'none';
+                }
+            } else {
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        // 2. LINKSKLICK (Schließen & Turbo-Löschen)
         document.addEventListener('click', (e) => {
+            // Menü schließen
+            if (contextMenu.style.display === 'block') {
+                contextMenu.style.display = 'none';
+                return;
+            }
+
+            // Turbo-Löschen (Nur wenn Tisch NICHT gesperrt)
             const target = e.target.closest('.guest-on-table');
             if (target) {
+                const parentTable = target.closest('.table');
+                
+                // WICHTIG: Wenn gesperrt -> Nichts tun!
+                if (parentTable && parentTable.classList.contains('locked')) return;
+
+                // Sonst: Rauswerfen
                 pool.appendChild(target);
                 target.classList.remove('guest-on-table');
                 target.classList.add('guest-item');
                 target.style.display = 'flex'; 
                 updateCounters();
                 saveState();
+            }
+        });
+
+        // 3. MENÜ-AKTIONEN
+        
+        // Sperren / Entsperren
+        if(lockBtn) {
+            lockBtn.addEventListener('click', () => {
+                if (currentContextObj && currentContextObj.table) {
+                    currentContextObj.table.classList.toggle('locked');
+                    saveState();
+                }
+            });
+        }
+
+        // Entfernen (Korrigiert: Macht die Arbeit direkt selbst)
+        document.getElementById('ctx-remove').addEventListener('click', () => {
+            if (currentContextObj && currentContextObj.guest) {
+                const target = currentContextObj.guest;
+                
+                // Gast zurück in den Pool werfen
+                pool.appendChild(target);
+                target.classList.remove('guest-on-table');
+                target.classList.add('guest-item');
+                target.style.display = 'flex'; 
+                
+                // Aufräumen
+                updateCounters();
+                saveState();
+                
+                // Menü schließen
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        // Bearbeiten
+        document.getElementById('ctx-edit-name').addEventListener('click', () => {
+            if (currentContextObj && currentContextObj.guest) {
+                const g = currentContextObj.guest;
+                const newName = prompt("Namen bearbeiten:", g.getAttribute('data-name'));
+                if (newName) {
+                    g.setAttribute('data-name', newName);
+                    g.querySelector('.guest-name-text').innerText = newName;
+                    saveState();
+                }
+            }
+        });
+
+        // Firma ändern
+        document.getElementById('ctx-edit-company').addEventListener('click', () => {
+            if (currentContextObj && currentContextObj.guest) {
+                const g = currentContextObj.guest;
+                const newComp = prompt("Firma ändern:", g.getAttribute('data-company'));
+                if (newComp !== null) {
+                    g.setAttribute('data-company', newComp);
+                    let cDiv = g.querySelector('.guest-company-text');
+                    if(!cDiv) { cDiv = document.createElement('div'); cDiv.className='guest-company-text'; g.appendChild(cDiv); }
+                    cDiv.innerText = newComp;
+                    g.className = 'guest-on-table ' + getCompanyClass(newComp);
+                    saveState();
+                }
             }
         });
 
@@ -651,28 +824,37 @@
         }
 
         function saveState() {
+            // Gäste speichern
             const allGuests = [];
-            const guestElements = document.querySelectorAll('[id^="g_import_"]');
-            guestElements.forEach(el => {
+            document.querySelectorAll('[id^="g_import_"]').forEach(el => {
                 let parentId = el.parentElement.id;
                 if (el.parentElement.classList.contains('seat-container')) {
                     parentId = el.parentElement.parentElement.id;
                 }
                 allGuests.push({
-                    id: el.id,
-                    name: el.getAttribute('data-name'),
-                    company: el.getAttribute('data-company'),
-                    location: parentId
+                    id: el.id, name: el.getAttribute('data-name'), 
+                    company: el.getAttribute('data-company'), location: parentId
                 });
             });
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(allGuests));
+
+            // Gesperrte Tische speichern (NEU)
+            const lockedTables = [];
+            document.querySelectorAll('.table.locked').forEach(t => lockedTables.push(t.id));
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ guests: allGuests, locked: lockedTables }));
         }
 
         function loadState() {
-            const data = localStorage.getItem(STORAGE_KEY);
-            if (!data) return false;
-            const guests = JSON.parse(data);
-            if (guests.length === 0) return false;
+            const dataStr = localStorage.getItem(STORAGE_KEY);
+            if (!dataStr) return false;
+            
+            let data;
+            try { data = JSON.parse(dataStr); } catch(e) { return false; }
+
+            let guests = Array.isArray(data) ? data : data.guests;
+            let locked = data.locked || [];
+
+            if (!guests || guests.length === 0) return false;
 
             pool.innerHTML = '';
             document.querySelectorAll('.seat-container').forEach(el => el.innerHTML = '');
@@ -697,6 +879,13 @@
                 if (targetContainer) targetContainer.appendChild(newEl);
                 else pool.appendChild(newEl);
             });
+
+            // Tische wieder sperren (NEU)
+            locked.forEach(tId => {
+                const t = document.getElementById(tId);
+                if(t) t.classList.add('locked');
+            });
+
             updateCounters();
             return true;
         }
