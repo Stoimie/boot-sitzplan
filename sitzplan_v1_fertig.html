@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Sitzplan Boot</title>
+
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        /* --- GRUNDGERÜST --- */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            height: 100vh; /* Volle Höhe des Fensters */
+            margin: 0;
+            background-color: #333; /* Dunkler Hintergrund außenrum */
+            overflow: hidden; /* Kein Scrollen am Body, nur im Boot-Bereich */
+        }
+
+        /* --- LINKE SEITE: GÄSTELISTE --- */
+        #guest-sidebar {
+            width: 300px;
+            min-width: 300px; /* Fixe Breite */
+            background: #fff;
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+        }
+
+        h3 { margin-top: 0; color: #333; }
+        .hint { font-size: 12px; color: #666; margin-bottom: 15px; }
+
+        .guest-item {
+            /* --- BASIS-OPTIK --- */
+            background-color: #444;
+            color: white;
+            padding: 10px;
+            margin-bottom: 5px;
+            cursor: grab;
+            border-radius: 4px;
+            font-size: 14px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+
+            /* --- LAYOUT FÜR NAME & FIRMA --- */
+            display: flex;       /* Erlaubt flexiblere Anordnung */
+            flex-direction: column; /* Stapelt Name und Firma übereinander */
+            justify-content: center;
+            line-height: 1.2;
+        }
+
+        .guest-name-text {
+            font-weight: bold;
+        }
+        
+        .guest-company-text {
+            font-size: 11px;
+            color: #ccc; /* Etwas grauer, damit es nicht so dominant ist */
+            font-style: italic;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis; /* Pünktchen, wenn Firmenname zu lang */
+        }
+        
+        .guest-item:active { cursor: grabbing; }
+
+        /* --- RECHTE SEITE: SCROLL-BEREICH --- */
+        #boat-scroll-container {
+            flex-grow: 1;
+            overflow: auto; /* HIER passiert das Scrollen */
+            background-color: #e0e0e0;
+            padding: 20px; /* Bisschen Abstand zum Rand */
+            display: flex;
+            justify-content: center; /* Zentriert den Plan */
+        }
+
+        /* --- DER NEUE MAP-WRAPPER --- */
+        /* Das ist der "Rahmen" um Bild + Tische */
+        #map-wrapper {
+            position: relative; /* WICHTIG: Damit Tische hier drin positioniert werden */
+            width: 100%;
+            max-width: 1200px; /* Maximale Breite, damit es auf riesigen Monitoren nicht explodiert */
+            /* Höhe passt sich automatisch dem Bild an! */
+        }
+
+        /* Das Bild selbst */
+        #plan-image {
+            width: 100%;
+            display: block; /* Verhindert kleine Lücken unten */
+            pointer-events: none; /* Damit man das Bild nicht aus Versehen zieht */
+            border-radius: 4px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+        }
+
+        /* --- DIE TISCHE --- */
+       .table {
+            position: absolute;
+            
+            /* --- DIE FORMEL FÜR RUNDE KREISE --- */
+            width: 6.5%;          /* Breite: Probier Werte zwischen 5% und 8% */
+            aspect-ratio: 1 / 1;  /* Zwingt das Verhältnis auf 1:1 (Quadrat) */
+            height: auto;         /* WICHTIG: Löscht alte Höhen-Angaben! */
+            
+            /* --- KALIBRIERUNG BEENDET (UNSICHTBAR MACHEN) --- */
+            background-color: transparent;  /* Keine rote Farbe mehr */
+            border: none;                   /* Kein gelber Rand mehr */
+            /* ------------------------------------------------ */
+
+            border-radius: 50%;   /* Macht das Quadrat rund */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center; /* Zentriert den Inhalt auch vertikal */
+            z-index: 10;
+            
+            /* Damit der Text nicht aus dem Kreis läuft */
+            overflow: hidden; 
+
+            /* NEU: Damit das Vergrößern sanft animiert wird */
+            transition: all 0.2s ease-in-out;
+        }
+
+        /* --- DER ZOOM-EFFEKT --- */
+        .table:hover {
+            /* 1. Zoom: 2.5-fache Größe (250%) */
+            transform: scale(2.5); 
+            
+            /* 2. Vordergrund: WICHTIG! Muss über den anderen Tischen liegen */
+            z-index: 1000; 
+            
+            /* 3. Lesbarkeit: Hintergrund wieder weiß machen, sonst sieht man die Linien */
+            background-color: white; 
+            
+            /* 4. Optik: Eckiger machen, damit die Liste besser reinpasst */
+            border-radius: 10px; /* Leicht abgerundete Ecken statt Kreis */
+            
+            /* 5. Schatten: Damit er schön über dem Plan "schwebt" */
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+            
+            /* 6. Formzwang aufheben (damit er wachsen kann, wenn Liste lang ist) */
+            aspect-ratio: auto;
+            height: auto;
+            min-height: 100px; /* Mindesthöhe damit es nicht springt */
+            border: 1px solid #ccc; /* Feiner Rand */
+        }
+        
+        /* Optional: Schrift etwas kleiner machen im Zoom, damit mehr reinpasst */
+        .table:hover .guest-on-table {
+            font-size: 8px; /* Kleinerer Text, da der Tisch ja riesig gezoomt wird */
+            padding: 1px;
+        }
+
+        .seat-container {
+            width: 90%;
+            height: 80%;
+            overflow-y: auto;
+            scrollbar-width: none; /* Scrollbar verstecken */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Versteckt Scrollbar in Webkit-Browsern (Chrome/Safari) */
+        .seat-container::-webkit-scrollbar { display: none; }
+
+        .guest-on-table {
+            font-size: 11px; /* Schriftgröße Tisch */
+            background: rgba(255,255,255,0.95);
+            color: black;
+            margin: 1px;
+            padding: 2px 4px;
+            border-radius: 3px;
+            cursor: grab;
+            text-align: center;
+            width: 90%;
+            border: 1px solid #999;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+      /* --- POSITIONIERUNG (Schiffe versenken!) --- */
+        /* top = Abstand von oben | left = Abstand von links */
+
+        /* --- LINKE REIHE (von oben nach unten) --- */
+        /* Tische: 12, 10, 6, 4, 1 (Der ganz unten links ist wohl Tisch 4 oder 1?) */
+        /* Prüfe auf dem Plan, welche Nummer unten steht! Ich rate mal: */
+        
+        #t12 { top: 39%; left: 24%; }
+        #t10 { top: 65%; left: 24%; }
+        #t6  { top: 84%; left: 24%; }
+        #t4  { top: 108%; left: 24%; }
+        #t1  { top: 123%; left: 24%; } /* Ganz unten links */
+
+        /* --- MITTLERE REIHE (von oben nach unten) --- */
+        /* Tische: 11, 9, 7, 5, 2 */
+
+        #t11 { top: 50%; left: 28%; }
+        #t9  { top: 69%; left: 36%; }
+        #t7  { top: 84%; left: 36%; }
+        #t5  { top: 108%; left: 36%; }
+        #t2  { top: 123%; left: 36%; } /* Ganz unten mitte */
+
+        /* --- RECHTE REIHE (Die zwei Einzelnen) --- */
+        /* Tische: 8 und 3 */
+
+        #t8  { top: 76%; left: 48%; }
+        #t3  { top: 116%; left: 48%; } /* Der unten rechts */
+
+        /* --- TISCH-ÜBERSCHRIFT (TITEL) --- */
+        
+        .table-title {
+            /* 1. Normalzustand: Unsichtbar */
+            display: none; 
+            
+            /* Design, falls sichtbar */
+            width: 100%;
+            text-align: center;
+            font-weight: bold;
+            color: #d32f2f; /* Ein schönes Rot */
+            border-bottom: 1px solid #ddd; /* Trennlinie */
+            margin-bottom: 2px;
+            white-space: nowrap; /* Kein Zeilenumbruch */
+        }
+
+        /* 2. Hover-Zustand: Sichtbar machen */
+        /* Wenn man über .table fährt, zeige .table-title */
+        .table:hover .table-title {
+            display: block;
+            
+            /* WICHTIG: Die Schriftgröße! */
+            /* Da der Tisch um 250% (Faktor 2.5) vergrößert wird, */
+            /* müssen wir die Schrift winzig machen. */
+            /* 5px * 2.5 = 12.5px (Lesbare Größe) */
+            font-size: 8px; 
+            
+            padding-top: 2px;
+        }
+       /* --- DER ZÄHLER (z.B. "3 / 8") --- */
+        .seat-counter {
+            position: absolute;  /* WICHTIG: Löst den Text vom Rest */
+            top: 87%;            /* Schiebt ihn nach unten (ca. unteres Drittel) */
+            left: 0;
+            width: 100%;         /* Geht über die volle Breite */
+            
+            text-align: center;  /* Zentriert den Text horizontal */
+            font-size: 13px;     /* Schriftgröße */
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.9); /* Starker Schatten für Lesbarkeit */
+            pointer-events: none; /* Damit man beim Ziehen nicht aus Versehen den Text greift */
+            
+            /* Zentrier-Trick für absolute Positionierung (optional, falls er nicht mittig wirkt) */
+            transform: translateY(-50%); 
+        }
+
+        /* --- LOGIK: ANZEIGEN & VERSTECKEN --- */
+
+        /* 1. Im Normalzustand: Namen verstecken! */
+        .guest-on-table {
+            display: none; 
+        }
+
+        /* 2. Im Hover-Zustand (Zoom): */
+        /* Zähler verstecken (wir brauchen Platz für Namen) */
+        .table:hover .seat-counter {
+            display: none;
+        }
+
+        /* Namen wieder anzeigen */
+        .table:hover .guest-on-table {
+            display: block;
+        }
+        /* Feedback: Wenn man über einen Namen im Tisch fährt */
+        .guest-on-table:hover {
+            background-color: #ffcdd2; /* Zartes Rot */
+            color: #b71c1c;            /* Dunkelrote Schrift */
+            cursor: pointer;           /* Zeigefinger-Symbol */
+            border-color: red;
+        }
+
+    </style>
+    
+</head>
+<body>
+
+    <div id="guest-sidebar">
+        <h3>Gästeliste</h3>
+        
+        <div style="margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 20px;">
+            <p class="hint">Lade eine Excel-Datei (.xlsx) hoch.<br>Spalten: <b>Vorname, Name, Firma</b></p>
+            <input type="file" id="excel-upload" accept=".xlsx, .xls" style="font-size: 12px; width: 100%;">
+        </div>
+
+        <p class="hint">Ziehe Namen auf die Tische</p>
+        
+        <div id="guest-pool"></div>
+
+        <div style="margin-top: 20px; text-align: center;">
+            <button id="reset-btn" style="background: #d32f2f; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                ⚠️ Plan komplett löschen
+            </button>
+        </div>
+    </div>
+
+    
+
+    <div id="boat-scroll-container">
+        
+        <div id="map-wrapper">
+            
+            <img src="plan.png" id="plan-image" alt="Bootsplan">
+
+            <div class="table" id="t12" data-max="10">
+                <div class="table-title">Tisch 12</div>
+                <div class="seat-counter">0 / 10</div>
+                <div class="seat-container"></div></div>
+            <div class="table" id="t11" data-max="10">
+                <div class="table-title">Tisch 11</div>
+                <div class="seat-counter">0 / 10</div>
+                <div class="seat-container"></div></div>
+
+            <div class="table" id="t10" data-max="8">
+                <div class="table-title">Tisch 10</div>
+                <div class="seat-counter">0 / 8</div>
+                <div class="seat-container"></div></div>
+            <div class="table" id="t9" data-max="8">
+                <div class="table-title">Tisch 9</div>
+                <div class="seat-counter">0 / 8</div>
+                <div class="seat-container"></div></div>
+            <div class="table" id="t8" data-max="8">
+                <div class="table-title">Tisch 8</div>
+                <div class="seat-counter">0 / 8</div>
+                <div class="seat-container"></div></div>
+
+            <div class="table" id="t6" data-max="8">
+                <div class="table-title">Tisch 6</div>
+                <div class="seat-counter">0 / 8</div>
+                <div class="seat-container"></div></div>
+            <div class="table" id="t7" data-max="8">
+                <div class="table-title">Tisch 7</div>
+                <div class="seat-counter">0 / 8</div>
+                <div class="seat-container"></div></div>
+
+            <div class="table" id="t4" data-max="8">
+                <div class="table-title">Tisch 4</div>
+                <div class="seat-counter">0 / 8</div>
+                <div class="seat-container"></div></div>
+            <div class="table" id="t5" data-max="8">
+                <div class="table-title">Tisch 5</div>
+                <div class="seat-counter">0 / 8</div>
+                <div class="seat-container"></div></div>
+            <div class="table" id="t3" data-max="8">
+                <div class="table-title">Tisch 3</div>
+                <div class="seat-counter">0 / 8</div>
+                <div class="seat-container"></div></div>
+
+            <div class="table" id="t1" data-max="8">
+                <div class="table-title">Tisch 1</div>
+                <div class="seat-counter">0 / 8</div>
+                <div class="seat-container"></div></div>
+            <div class="table" id="t2" data-max="8">
+                <div class="table-title">Tisch 2</div>
+                <div class="seat-counter">0 / 8</div>
+                <div class="seat-container"></div></div>
+
+        </div>
+    </div>
+
+   <script>
+        /* --- 1. CONFIG & REFERENZEN --- */
+        const pool = document.getElementById('guest-pool');
+        const containers = document.querySelectorAll('.seat-container, #guest-pool');
+        const STORAGE_KEY = 'boot_sitzplan_data_v1';
+
+        /* --- 2. STARTUP: LADEN ODER WARTEN --- */
+        window.addEventListener('load', () => {
+            // Versuchen, gespeicherte Daten zu laden
+            if (!loadState()) {
+                updateCounters(); // Falls nichts da ist, einfach Zähler initieren
+            }
+        });
+
+        /* --- 3. STATE MANAGEMENT (SPEICHERN & LADEN) --- */
+        
+        function saveState() {
+            const allGuests = [];
+            
+            // Wir suchen alle Gäste (im Pool UND auf den Tischen)
+            // Dazu nutzen wir eine Klasse, die wir gleich vergeben werden, oder selektieren alle Divs mit ID
+            const guestElements = document.querySelectorAll('[id^="g_import_"]');
+            
+            guestElements.forEach(el => {
+                // Wo ist der Gast gerade? (Pool-ID oder Tisch-ID)
+                let parentId = el.parentElement.id;
+                
+                // Wenn er auf einem Tisch sitzt, ist das Eltern-Element ".seat-container".
+                // Wir brauchen aber die ID des Tisches (der Opa des Elements)
+                if (el.parentElement.classList.contains('seat-container')) {
+                    parentId = el.parentElement.parentElement.id; // z.B. "t12"
+                }
+
+                allGuests.push({
+                    id: el.id,
+                    name: el.getAttribute('data-name'),      // Wir speichern die Rohdaten
+                    company: el.getAttribute('data-company'),
+                    location: parentId
+                });
+            });
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(allGuests));
+        }
+
+        function loadState() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            if (!data) return false; // Nichts gespeichert
+
+            const guests = JSON.parse(data);
+            if (guests.length === 0) return false;
+
+            // Aufräumen bevor wir wiederherstellen
+            pool.innerHTML = '';
+            document.querySelectorAll('.seat-container').forEach(el => el.innerHTML = '');
+
+            guests.forEach(g => {
+                // Gast neu erstellen
+                const newEl = createGuestElement(g.id.replace('g_import_', ''), g.name, g.company, false); // false = nicht automatisch in Pool
+                
+                // An den richtigen Ort schieben
+                let targetContainer;
+                
+                if (g.location === 'guest-pool') {
+                    targetContainer = pool;
+                    // Styling Reset
+                    newEl.classList.remove('guest-on-table');
+                    newEl.classList.add('guest-item');
+                } else {
+                    // Es ist ein Tisch (z.B. t12)
+                    const table = document.getElementById(g.location);
+                    if (table) {
+                        targetContainer = table.querySelector('.seat-container');
+                        // Styling für Tisch
+                        newEl.classList.add('guest-on-table');
+                        newEl.classList.remove('guest-item');
+                    }
+                }
+
+                if (targetContainer) {
+                    targetContainer.appendChild(newEl);
+                } else {
+                    // Fallback: Zurück in Pool, falls Tisch nicht mehr existiert
+                    pool.appendChild(newEl);
+                }
+            });
+
+            updateCounters();
+            return true;
+        }
+
+        // RESET BUTTON
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            if(confirm('Möchtest du wirklich den ganzen Plan löschen?')) {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload(); // Seite neu laden -> Alles leer
+            }
+        });
+
+
+        /* --- 4. EXCEL IMPORT LOGIK --- */
+        document.getElementById('excel-upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+
+            reader.onload = (event) => {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                // Pool leeren (Neuer Import überschreibt alles)
+                pool.innerHTML = '';
+                // Auch Tische leeren bei neuem Import? Ja, meistens besser.
+                document.querySelectorAll('.seat-container').forEach(el => el.innerHTML = '');
+
+                jsonData.forEach((row, index) => {
+                    const vorname = row['Vorname'] || '';
+                    const nachname = row['Name'] || ''; 
+                    const firma = row['Firma'] || ''; 
+
+                    const fullName = `${vorname} ${nachname}`.trim();
+
+                    if (fullName.length > 0) {
+                        // Der letzte Parameter 'true' heißt: Pack ihn direkt in den Pool
+                        createGuestElement(index + 1, fullName, firma, true);
+                    }
+                });
+                
+                updateCounters();
+                saveState(); // SOFORT SPEICHERN NACH IMPORT
+            };
+
+            reader.readAsArrayBuffer(file);
+        });
+
+        /* --- 5. HELFER: GAST ELEMENT ERSTELLEN --- */
+        function createGuestElement(idSuffix, name, company, appendToPool = true) {
+            const div = document.createElement('div');
+            div.classList.add('guest-item');
+            div.setAttribute('draggable', 'true');
+            div.id = 'g_import_' + idSuffix;
+
+            // WICHTIG: Daten als Attribute speichern für Save/Load
+            div.setAttribute('data-name', name);
+            div.setAttribute('data-company', company);
+
+            let htmlContent = `<div class="guest-name-text">${name}</div>`;
+            if (company) {
+                htmlContent += `<div class="guest-company-text">${company}</div>`;
+            }
+            div.innerHTML = htmlContent;
+
+            // Drag Events
+            div.addEventListener('dragstart', () => { div.classList.add('dragging'); });
+            div.addEventListener('dragend', () => { 
+                div.classList.remove('dragging'); 
+                handleDragEnd(div);
+            });
+
+            if (appendToPool) {
+                pool.appendChild(div);
+            }
+            return div; // Element zurückgeben für manuelle Platzierung beim Laden
+        }
+
+        /* --- 6. DRAG & DROP LOGIK --- */
+        function handleDragEnd(draggable) {
+            if (draggable.parentElement.classList.contains('seat-container')) {
+                draggable.classList.add('guest-on-table');
+                draggable.classList.remove('guest-item');
+            } else {
+                draggable.classList.remove('guest-on-table');
+                draggable.classList.add('guest-item');
+            }
+            updateCounters();
+            saveState(); // SPEICHERN NACH JEDEM DROP
+        }
+
+        containers.forEach(container => {
+            container.addEventListener('dragover', e => {
+                if (container.id === 'guest-pool') {
+                    e.preventDefault();
+                    const draggable = document.querySelector('.dragging');
+                    if(draggable) container.appendChild(draggable);
+                    return;
+                }
+
+                const table = container.parentElement;
+                const maxSeats = parseInt(table.getAttribute('data-max'));
+                const currentGuests = container.children.length;
+
+                if (currentGuests < maxSeats) {
+                    e.preventDefault();
+                    const draggable = document.querySelector('.dragging');
+                    if(draggable) container.appendChild(draggable);
+                }
+            });
+        });
+
+        /* --- 7. KLICK ZUM LÖSCHEN --- */
+        document.addEventListener('click', (e) => {
+            const target = e.target.closest('.guest-on-table');
+            if (target) {
+                pool.appendChild(target);
+                target.classList.remove('guest-on-table');
+                target.classList.add('guest-item');
+                
+                updateCounters();
+                saveState(); // SPEICHERN NACH LÖSCHEN
+            }
+        });
+
+        /* --- 8. ZÄHLER UPDATES --- */
+        function updateCounters() {
+            document.querySelectorAll('.table').forEach(table => {
+                const container = table.querySelector('.seat-container');
+                const counter = table.querySelector('.seat-counter');
+                const max = table.getAttribute('data-max');
+                
+                const currentCount = container.children.length;
+                counter.innerText = currentCount + " / " + max;
+                
+                if (currentCount >= max) {
+                    counter.style.color = "#81c784"; 
+                } else {
+                    counter.style.color = "white";
+                }
+            });
+        }
+    </script>
+</body>
+</html>

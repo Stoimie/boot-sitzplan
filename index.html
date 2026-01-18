@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Sitzplan Boot - Final V2.6</title>
+
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        /* --- GRUNDGERÜST --- */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            height: 100vh;
+            margin: 0;
+            background-color: #333;
+            overflow: hidden;
+        }
+
+        /* --- LINKE SEITE: GÄSTELISTE --- */
+        #guest-sidebar {
+            width: 300px;
+            min-width: 300px;
+            background: #fff;
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+        }
+
+        h3 { margin-top: 0; margin-bottom: 10px; color: #333; }
+        .hint { font-size: 11px; color: #666; margin-bottom: 10px; }
+
+        /* --- STATISTIK BOX --- */
+        #stats-box {
+            background: #e3f2fd;
+            color: #0d47a1;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 13px;
+            margin-bottom: 15px;
+            border: 1px solid #bbdefb;
+        }
+
+        /* --- SUCHE --- */
+        #search-box {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        /* --- DESIGN DER GÄSTE-KARTE (LISTE) --- */
+        .guest-item {
+            background-color: #f5f5f5; 
+            color: #333;
+            padding: 6px 8px; 
+            margin-bottom: 4px;
+            cursor: grab;
+            border-radius: 4px;
+            font-size: 12px; 
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            border-left: 5px solid #999; 
+            
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            line-height: 1.2;
+            transition: all 0.2s;
+        }
+        
+        .guest-item:active { cursor: grabbing; }
+
+        .guest-name-text { font-weight: bold; }
+        
+        .guest-company-text {
+            font-size: 10px;
+            color: #666;
+            font-style: italic;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* --- FARBEN FÜR FIRMEN --- */
+        .guest-item.company-aon { border-left-color: #d32f2f; background-color: #ffebee; }
+        .guest-item.company-other { border-left-color: #1976d2; background-color: #e3f2fd; }
+
+        /* --- RECHTE SEITE: SCROLL-BEREICH --- */
+        #boat-scroll-container {
+            flex-grow: 1;
+            overflow: auto;
+            background-color: #e0e0e0;
+            padding: 20px;
+            
+            /* WICHTIG: Kein Flexbox mehr! */
+            display: block; 
+            
+            /* Das ist der Ersatz für justify-center: */
+            text-align: center; 
+        }
+
+        /* --- DER ROCK-SOLID WRAPPER (V3.0) --- */
+        #map-wrapper {
+            position: relative;
+            
+            /* HIER IST DER SCHLÜSSEL: */
+            /* Der Rahmen selbst bekommt die Bremse! */
+            max-width: 1200px; 
+            
+            /* Er nimmt sich den Platz, den er braucht (bis 1200px) */
+            width: 100%;
+            
+            /* Zentriert den Rahmen auf dem Bildschirm */
+            margin: 0 auto;
+            
+            /* Verhindert Grafikfehler */
+            line-height: 0;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+        }
+
+        #plan-image {
+            /* Das Bild ist jetzt "dumm" und füllt einfach den Rahmen aus */
+            width: 100%; 
+            height: auto; 
+            display: block;
+        }
+        
+        /* Sicherheits-Regel für alle Elemente */
+        * { box-sizing: border-box; }
+        
+        /* WICHTIG: Damit Prozentrechnung überall gleich funktioniert */
+        * { box-sizing: border-box; }
+
+        /* --- DIE TISCHE --- */
+        .table {
+            position: absolute;
+            width: 6.5%;          
+            aspect-ratio: 1 / 1;  
+            height: auto;         
+            background-color: transparent;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            overflow: hidden; 
+            transition: all 0.2s ease-in-out;
+            transform: translate(-50%, -50%);
+        }
+
+        /* --- HOVER EFFEKT (ZOOM) --- */
+        .table:hover {
+            transform: scale(2.5);
+            z-index: 1000;
+            background-color: white; 
+            border-radius: 8px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+            aspect-ratio: auto;
+            height: auto;
+            min-height: 100px;
+            border: 1px solid #999;
+        }
+
+        .seat-container {
+            width: 95%;
+            height: 85%;
+            overflow-y: auto;
+            scrollbar-width: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .seat-container::-webkit-scrollbar { display: none; }
+
+        /* --- GAST AUF DEM TISCH --- */
+        .guest-on-table {
+            display: none; 
+            
+            /* HIER GEÄNDERT: Jetzt 6px (noch kleiner) */
+            font-size: 6px; 
+            font-weight: normal; 
+
+            background: #fff;
+            color: #333;
+            margin: 1px 0;
+            
+            /* Padding reduziert für kompakten Look */
+            padding: 1px 3px; 
+            /* Das zentriert den Text vertikal etwas besser: */
+            line-height: 1.2;
+
+            border-radius: 3px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+            text-align: center;
+            width: 92%;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            border-left: 3px solid #999; 
+        }
+
+        /* --- NEU: FIRMA IM TISCH EXTRA KLEIN --- */
+        .guest-on-table .guest-company-text {
+            font-size: 5px;  /* Kleiner als der Name (6px) */
+            line-height: 2;  /* Zeilenabstand verringern */
+            opacity: 0.8;    /* Etwas blasser machen */
+            margin-top: 0;   /* Abstand zum Namen wegnehmen */
+        }
+
+        .guest-on-table.company-aon { border-left-color: #d32f2f; }
+        .guest-on-table.company-other { border-left-color: #1976d2; }
+
+        .table:hover .guest-on-table { display: block; }
+
+        .guest-on-table:hover {
+            background-color: #ffebee;
+            color: #d32f2f;
+            border: 1px solid red;
+        }
+
+        /* --- TEXTE IM TISCH --- */
+        .table-title {
+            display: none;
+            width: 100%;
+            text-align: center;
+            font-weight: bold;
+            color: #d32f2f;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 3px;
+        }
+        .table:hover .table-title { 
+            display: block; 
+            font-size: 7px; 
+            padding-top: 3px; 
+        }
+
+        .seat-counter {
+            position: absolute;
+            top: 75%;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.9);s
+            pointer-events: none;
+        }
+        .table:hover .seat-counter { display: none; }
+
+        /* --- POSITIONIERUNG --- */
+        #t12 { top: 21.3%; left: 27%; }
+        #t10 { top: 33.8%; left: 27%; }
+        #t6  { top: 42.5%; left: 27%; }
+        #t4  { top: 54.2%; left: 27%; }
+        #t1  { top: 61.5%; left: 27%; }
+
+        #t11 { top: 26.6%; left: 31.5%; }
+        #t9  { top: 35.6%; left: 39.2%; }
+        #t7  { top: 42.5%; left: 39.2%; }
+        #t5  { top: 54.2%; left: 39.2%; }
+        #t2  { top: 61.5%; left: 39.2%; }
+
+        #t8  { top: 38.9%; left: 51.4%; }
+        #t3  { top: 57.8%; left: 51.4%; }
+
+        /* --- DRUCK-ANSICHT --- */
+        #print-area { display: none; }
+
+        @media print {
+            #guest-sidebar, #boat-scroll-container, button { display: none !important; }
+            body { background-color: white; height: auto; overflow: visible; display: block; }
+            #print-area { display: block; padding: 40px; font-family: Arial, sans-serif; }
+            .print-table-block { margin-bottom: 20px; page-break-inside: avoid; border: 1px solid #ddd; padding: 10px; border-radius: 5px; }
+            .print-table-title { font-size: 16px; font-weight: bold; color: #d32f2f; margin-bottom: 5px; border-bottom: 2px solid #d32f2f; }
+            .print-guest-row { font-size: 12px; padding: 3px 0; border-bottom: 1px solid #eee; }
+            .print-guest-company { color: #666; font-style: italic; font-size: 10px; margin-left: 10px; }
+        }
+
+        /* --- TEMPORÄRE HILFSLINIEN (zu Ausrichten der Tische) --- */
+        /* .table {
+        border: 2px solid red !important;
+        background-color: rgba(255, 0, 0, 0.3);
+        z-index: 9999;
+        }
+        */
+    </style>
+</head>
+<body>
+
+    <div id="print-area">
+        <h1>Sitzplan Übersicht</h1>
+        <div id="print-content"></div>
+    </div>
+
+    <div id="guest-sidebar">
+        <h3>Gästeliste</h3>
+        
+        <div id="stats-box">Lade Daten...</div>
+
+        <div style="margin-bottom: 15px; border-bottom: 1px solid #ccc; padding-bottom: 15px;">
+            <p class="hint">Excel-Upload (.xlsx)<br>Spalten: <b>Vorname, Name, Firma</b></p>
+            <input type="file" id="excel-upload" accept=".xlsx, .xls" style="font-size: 11px; width: 100%;">
+        </div>
+
+        <input type="text" id="search-box" placeholder="🔍 Namen suchen...">
+        <p class="hint">Ziehe Namen auf die Tische.</p>
+        
+        <div id="guest-pool"></div>
+
+        <div style="margin-top: 20px; text-align: center; border-top: 1px solid #ccc; padding-top: 15px;">
+            <button onclick="printList()" style="background: #1976d2; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%; margin-bottom: 10px;">
+                🖨️ Liste Drucken
+            </button>
+            <button id="reset-btn" style="background: #d32f2f; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%;">
+                ⚠️ Plan komplett löschen
+            </button>
+        </div>
+    </div>
+
+    <div id="boat-scroll-container">
+        <div id="map-wrapper">
+            <img src="plan.png" id="plan-image" alt="Bootsplan">
+
+            <div class="table" id="t12" data-max="10"><div class="table-title">Tisch 12</div><div class="seat-counter">0/10</div><div class="seat-container"></div></div>
+            <div class="table" id="t11" data-max="10"><div class="table-title">Tisch 11</div><div class="seat-counter">0/10</div><div class="seat-container"></div></div>
+            <div class="table" id="t10" data-max="8"><div class="table-title">Tisch 10</div><div class="seat-counter">0/8</div><div class="seat-container"></div></div>
+            <div class="table" id="t9" data-max="8"><div class="table-title">Tisch 9</div><div class="seat-counter">0/8</div><div class="seat-container"></div></div>
+            <div class="table" id="t8" data-max="8"><div class="table-title">Tisch 8</div><div class="seat-counter">0/8</div><div class="seat-container"></div></div>
+            <div class="table" id="t6" data-max="8"><div class="table-title">Tisch 6</div><div class="seat-counter">0/8</div><div class="seat-container"></div></div>
+            <div class="table" id="t7" data-max="8"><div class="table-title">Tisch 7</div><div class="seat-counter">0/8</div><div class="seat-container"></div></div>
+            <div class="table" id="t4" data-max="8"><div class="table-title">Tisch 4</div><div class="seat-counter">0/8</div><div class="seat-container"></div></div>
+            <div class="table" id="t5" data-max="8"><div class="table-title">Tisch 5</div><div class="seat-counter">0/8</div><div class="seat-container"></div></div>
+            <div class="table" id="t3" data-max="8"><div class="table-title">Tisch 3</div><div class="seat-counter">0/8</div><div class="seat-container"></div></div>
+            <div class="table" id="t1" data-max="8"><div class="table-title">Tisch 1</div><div class="seat-counter">0/8</div><div class="seat-container"></div></div>
+            <div class="table" id="t2" data-max="8"><div class="table-title">Tisch 2</div><div class="seat-counter">0/8</div><div class="seat-container"></div></div>
+        </div>
+    </div>
+
+    <script>
+        const pool = document.getElementById('guest-pool');
+        const containers = document.querySelectorAll('.seat-container, #guest-pool');
+        const STORAGE_KEY = 'boot_sitzplan_data_v2';
+
+        window.addEventListener('load', () => {
+            if (!loadState()) updateCounters();
+        });
+
+        document.getElementById('search-box').addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const items = pool.querySelectorAll('.guest-item');
+            items.forEach(item => {
+                const text = item.innerText.toLowerCase();
+                item.style.display = text.includes(term) ? 'flex' : 'none';
+            });
+        });
+
+        function getCompanyClass(company) {
+            if (!company) return 'company-other';
+            if (company.toLowerCase().includes('aon')) return 'company-aon';
+            return 'company-other';
+        }
+
+     // 3. DRUCKEN (Jetzt mit Sortierung!)
+        window.printList = function() {
+            const content = document.getElementById('print-content');
+            content.innerHTML = ''; // Leeren
+
+            // 1. Alle Tische in eine echte Liste (Array) umwandeln
+            const tables = Array.from(document.querySelectorAll('.table'));
+
+            // 2. Die Liste sortieren
+            tables.sort((a, b) => {
+                // Wir holen den Text (z.B. "Tisch 12")
+                const textA = a.querySelector('.table-title').innerText;
+                const textB = b.querySelector('.table-title').innerText;
+                
+                // Wir filtern nur die Zahlen heraus (aus "Tisch 12" wird 12)
+                const numA = parseInt(textA.replace(/\D/g, ''));
+                const numB = parseInt(textB.replace(/\D/g, ''));
+
+                // Vergleichen: Ist A kleiner als B?
+                return numA - numB;
+            });
+
+            // 3. Die sortierte Liste durchgehen und drucken
+            tables.forEach(table => {
+                const title = table.querySelector('.table-title').innerText;
+                const guests = table.querySelectorAll('.guest-on-table');
+                
+                // Nur drucken, wenn auch wer sitzt
+                if (guests.length > 0) {
+                    let html = `<div class="print-table-block"><div class="print-table-title">${title} (${guests.length} Pers.)</div>`;
+                    
+                    guests.forEach(g => {
+                        // Daten holen
+                        const name = g.getAttribute('data-name');
+                        const company = g.getAttribute('data-company');
+                        
+                        html += `<div class="print-guest-row">
+                                    <b>${name}</b> 
+                                    <span class="print-guest-company">${company}</span>
+                                 </div>`;
+                    });
+                    
+                    html += `</div>`;
+                    content.innerHTML += html;
+                }
+            });
+            
+            // Druck-Dialog öffnen
+            window.print();
+        }
+
+        document.getElementById('excel-upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+
+                pool.innerHTML = '';
+                document.querySelectorAll('.seat-container').forEach(el => el.innerHTML = '');
+
+                jsonData.forEach((row, index) => {
+                    const vorname = row['Vorname'] || '';
+                    const nachname = row['Name'] || ''; 
+                    const firma = row['Firma'] || ''; 
+                    const fullName = `${vorname} ${nachname}`.trim();
+
+                    if (fullName.length > 0) {
+                        createGuestElement(index + 1, fullName, firma, true);
+                    }
+                });
+                updateCounters();
+                saveState();
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function createGuestElement(idSuffix, name, company, appendToPool = true) {
+            const div = document.createElement('div');
+            div.classList.add('guest-item');
+            div.classList.add(getCompanyClass(company));
+            div.setAttribute('draggable', 'true');
+            div.id = 'g_import_' + idSuffix;
+            div.setAttribute('data-name', name);
+            div.setAttribute('data-company', company);
+
+            let htmlContent = `<div class="guest-name-text">${name}</div>`;
+            if (company) htmlContent += `<div class="guest-company-text">${company}</div>`;
+            div.innerHTML = htmlContent;
+
+            div.addEventListener('dragstart', () => { div.classList.add('dragging'); });
+            div.addEventListener('dragend', () => { 
+                div.classList.remove('dragging'); 
+                handleDragEnd(div);
+            });
+
+            if (appendToPool) pool.appendChild(div);
+            return div;
+        }
+
+        function handleDragEnd(draggable) {
+            if (draggable.parentElement.classList.contains('seat-container')) {
+                draggable.classList.add('guest-on-table');
+                draggable.classList.remove('guest-item');
+                draggable.style.display = ''; 
+            } else {
+                draggable.classList.remove('guest-on-table');
+                draggable.classList.add('guest-item');
+                draggable.style.display = 'flex'; 
+            }
+            updateCounters();
+            saveState();
+        }
+
+        containers.forEach(container => {
+            container.addEventListener('dragover', e => {
+                if (container.id === 'guest-pool') {
+                    e.preventDefault();
+                    const draggable = document.querySelector('.dragging');
+                    if(draggable) container.appendChild(draggable);
+                    return;
+                }
+                const table = container.parentElement;
+                const maxSeats = parseInt(table.getAttribute('data-max'));
+                const currentGuests = container.children.length;
+                if (currentGuests < maxSeats) {
+                    e.preventDefault();
+                    const draggable = document.querySelector('.dragging');
+                    if(draggable) container.appendChild(draggable);
+                }
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            const target = e.target.closest('.guest-on-table');
+            if (target) {
+                pool.appendChild(target);
+                target.classList.remove('guest-on-table');
+                target.classList.add('guest-item');
+                target.style.display = 'flex'; 
+                updateCounters();
+                saveState();
+            }
+        });
+
+        function updateCounters() {
+            let totalSeats = 0;
+            let occupiedSeats = 0;
+            document.querySelectorAll('.table').forEach(table => {
+                const container = table.querySelector('.seat-container');
+                const counter = table.querySelector('.seat-counter');
+                const max = parseInt(table.getAttribute('data-max'));
+                const currentCount = container.children.length;
+                
+                totalSeats += max;
+                occupiedSeats += currentCount;
+
+                counter.innerText = currentCount + " / " + max;
+                if (currentCount >= max) counter.style.color = "#81c784"; 
+                else counter.style.color = "white";
+            });
+            const free = totalSeats - occupiedSeats;
+            document.getElementById('stats-box').innerText = 
+                `Belegt: ${occupiedSeats} / ${totalSeats} (Frei: ${free})`;
+        }
+
+        function saveState() {
+            const allGuests = [];
+            const guestElements = document.querySelectorAll('[id^="g_import_"]');
+            guestElements.forEach(el => {
+                let parentId = el.parentElement.id;
+                if (el.parentElement.classList.contains('seat-container')) {
+                    parentId = el.parentElement.parentElement.id;
+                }
+                allGuests.push({
+                    id: el.id,
+                    name: el.getAttribute('data-name'),
+                    company: el.getAttribute('data-company'),
+                    location: parentId
+                });
+            });
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(allGuests));
+        }
+
+        function loadState() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            if (!data) return false;
+            const guests = JSON.parse(data);
+            if (guests.length === 0) return false;
+
+            pool.innerHTML = '';
+            document.querySelectorAll('.seat-container').forEach(el => el.innerHTML = '');
+
+            guests.forEach(g => {
+                const newEl = createGuestElement(g.id.replace('g_import_', ''), g.name, g.company, false);
+                let targetContainer;
+                if (g.location === 'guest-pool') {
+                    targetContainer = pool;
+                    newEl.classList.remove('guest-on-table');
+                    newEl.classList.add('guest-item');
+                    newEl.style.display = 'flex';
+                } else {
+                    const table = document.getElementById(g.location);
+                    if (table) {
+                        targetContainer = table.querySelector('.seat-container');
+                        newEl.classList.add('guest-on-table');
+                        newEl.classList.remove('guest-item');
+                        newEl.style.display = ''; 
+                    }
+                }
+                if (targetContainer) targetContainer.appendChild(newEl);
+                else pool.appendChild(newEl);
+            });
+            updateCounters();
+            return true;
+        }
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            if(confirm('Möchtest du wirklich den ganzen Plan löschen?')) {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload();
+            }
+        });
+    </script>
+</body>
+</html>
