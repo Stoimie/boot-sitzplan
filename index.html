@@ -361,7 +361,11 @@
 
         <div style="margin-top: 20px; text-align: center; border-top: 1px solid #ccc; padding-top: 15px;">
             <button onclick="printList()" style="background: #1976d2; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%; margin-bottom: 10px;">
-                🖨️ Liste Drucken
+                🖨️ Liste Drucken (PDF)
+            </button>
+            
+            <button id="export-excel-btn" style="background: #2e7d32; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%; margin-bottom: 10px;">
+                💾 Export als Excel (.xlsx)
             </button>
             <button id="reset-btn" style="background: #d32f2f; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%;">
                 ⚠️ Plan komplett löschen
@@ -646,6 +650,51 @@
                 localStorage.removeItem(STORAGE_KEY);
                 location.reload();
             }
+        });
+
+        /* --- EXCEL EXPORT FUNKTION --- */
+        document.getElementById('export-excel-btn').addEventListener('click', () => {
+            let data = [];
+
+            // 1. Tische sammeln und sortieren (Tisch 1, Tisch 2...)
+            const tables = Array.from(document.querySelectorAll('.table'));
+            tables.sort((a, b) => {
+                const numA = parseInt(a.querySelector('.table-title').innerText.replace(/\D/g, ''));
+                const numB = parseInt(b.querySelector('.table-title').innerText.replace(/\D/g, ''));
+                return numA - numB;
+            });
+
+            // 2. Daten auslesen
+            tables.forEach(table => {
+                const tableName = table.querySelector('.table-title').innerText;
+                const guests = table.querySelectorAll('.guest-on-table');
+
+                guests.forEach(guest => {
+                    data.push({
+                        "Tisch": tableName,
+                        "Name": guest.getAttribute('data-name'),
+                        "Firma": guest.getAttribute('data-company') || ""
+                    });
+                });
+            });
+
+            if (data.length === 0) {
+                alert("Es sind noch keine Gäste platziert!");
+                return;
+            }
+
+            // 3. Excel Datei erstellen und herunterladen
+            const ws = XLSX.utils.json_to_sheet(data);
+            
+            // Spaltenbreite automatisch anpassen (Kosmetik)
+            const wscols = [{wch: 10}, {wch: 25}, {wch: 25}]; 
+            ws['!cols'] = wscols;
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Sitzplan Export");
+
+            // Datei speichern
+            XLSX.writeFile(wb, "Sitzplan_Boot_Export.xlsx");
         });
     </script>
 </body>
