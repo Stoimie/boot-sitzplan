@@ -793,6 +793,30 @@
         });
 
         function updateCounters() {
+            // --- OPTIMIERTE SORTIERUNG (Nach Nachname) ---
+            const pool = document.getElementById('guest-pool');
+            const guestsInPool = Array.from(pool.getElementsByClassName('guest-item'));
+            
+            guestsInPool.sort((a, b) => {
+                const fullA = a.getAttribute('data-name').trim();
+                const fullB = b.getAttribute('data-name').trim();
+                
+                // Trick: Wir nehmen das letzte Wort als Nachnamen
+                const lastA = fullA.split(' ').pop().toLowerCase();
+                const lastB = fullB.split(' ').pop().toLowerCase();
+                
+                // 1. Nach Nachnamen sortieren
+                if (lastA < lastB) return -1;
+                if (lastA > lastB) return 1;
+                
+                // 2. Wenn Nachnamen gleich sind, entscheidet der Vorname
+                return fullA.localeCompare(fullB);
+            });
+
+            // Neu einsortieren
+            guestsInPool.forEach(guest => pool.appendChild(guest));
+            // ---------------------------------------------
+
             let totalSeats = 0;
             let occupiedSeats = 0;
             
@@ -807,15 +831,13 @@
 
                 counter.innerText = currentCount + " / " + max;
 
-                // --- NEU: LOGIK FÜR DAS GRÜNE LEUCHTEN ---
                 if (currentCount >= max) {
-                    table.classList.add('table-full'); // Licht an! 🟢
+                    table.classList.add('table-full');
                     counter.style.color = "white"; 
                 } else {
-                    table.classList.remove('table-full'); // Licht aus 🔴
+                    table.classList.remove('table-full');
                     counter.style.color = "white";
                 }
-                // ----------------------------------------
             });
             
             const free = totalSeats - occupiedSeats;
