@@ -255,7 +255,7 @@
             font-size: 10px;
             font-weight: bold;
             color: white;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.9);s
+            text-shadow: 0 1px 3px rgba(0,0,0,0.9);
             pointer-events: none;
         }
         .table:hover .seat-counter { display: none; }
@@ -296,6 +296,44 @@
         z-index: 9999;
         }
         */
+
+        /* --- 1. DIE "PLOPP" ANIMATION --- */
+        @keyframes plopp {
+            0% { transform: scale(0); opacity: 0; }
+            60% { transform: scale(1.1); }  /* Geht kurz über die Größe hinaus */
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Wir wenden die Animation an, sobald ein Gast die Klasse erhält */
+        .guest-on-table {
+            animation: plopp 0.4s ease-out forwards;
+        }
+
+        /* --- 2. DER "GLASSMORPHISMUS" FÜR OFFENE TISCHE --- */
+        /* Das ersetzt den einfachen weißen Hintergrund beim Hover */
+        .table:hover {
+            background-color: rgba(255, 255, 255, 0.85) !important; /* Leicht durchsichtig */
+            backdrop-filter: blur(8px); /* Der Milchglas-Effekt (Weichzeichner dahinter) */
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important; /* Weicherer Schatten */
+            border: 1px solid rgba(255, 255, 255, 0.5) !important; /* Zarter weißer Rand */
+        }
+
+        /* --- 3. DER "FERTIG"-STATUS (GRÜNES LEUCHTEN) --- */
+        /* Diese Klasse fügen wir gleich per Javascript hinzu */
+        .table-full {
+            /* Ein grünes Leuchten (Schein nach außen) */
+            box-shadow: 0 0 15px #4caf50, inset 0 0 10px #4caf50 !important; 
+            border: 2px solid #4caf50 !important;
+            background-color: rgba(76, 175, 80, 0.3) !important; /* Transparentes Grün */
+            transition: all 0.5s ease; /* Sanfter Übergang */
+        }
+        
+        /* Damit die Schrift auf dem grünen Kreis gut lesbar bleibt */
+        .table-full .seat-counter {
+            color: #fff !important;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+            font-weight: 900;
+        }
     </style>
 </head>
 <body>
@@ -523,6 +561,7 @@
         function updateCounters() {
             let totalSeats = 0;
             let occupiedSeats = 0;
+            
             document.querySelectorAll('.table').forEach(table => {
                 const container = table.querySelector('.seat-container');
                 const counter = table.querySelector('.seat-counter');
@@ -533,9 +572,18 @@
                 occupiedSeats += currentCount;
 
                 counter.innerText = currentCount + " / " + max;
-                if (currentCount >= max) counter.style.color = "#81c784"; 
-                else counter.style.color = "white";
+
+                // --- NEU: LOGIK FÜR DAS GRÜNE LEUCHTEN ---
+                if (currentCount >= max) {
+                    table.classList.add('table-full'); // Licht an! 🟢
+                    counter.style.color = "white"; 
+                } else {
+                    table.classList.remove('table-full'); // Licht aus 🔴
+                    counter.style.color = "white";
+                }
+                // ----------------------------------------
             });
+            
             const free = totalSeats - occupiedSeats;
             document.getElementById('stats-box').innerText = 
                 `Belegt: ${occupiedSeats} / ${totalSeats} (Frei: ${free})`;
