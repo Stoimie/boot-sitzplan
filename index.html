@@ -526,6 +526,17 @@
         
         /* Highlight für "Voll" */
         .stat-sub { font-size: 11px; color: #666; margin-top: 5px; }
+
+        /* --- ORANGE WARN-BUTTON --- */
+        .btn-warning {
+            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+            box-shadow: 0 4px 15px rgba(245, 124, 0, 0.3);
+        }
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(245, 124, 0, 0.4);
+        }
+        
     </style>
 </head>
 <body>
@@ -558,6 +569,10 @@
             
             <button id="export-excel-btn" class="modern-btn btn-excel">
                 <span>💾</span> Excel Export
+            </button>
+
+            <button class="modern-btn btn-warning" id="clear-tables-btn" style="margin-bottom: 10px;">
+                🧹 Tische leeren
             </button>
 
             <button id="reset-btn" class="modern-btn btn-reset">
@@ -1168,6 +1183,43 @@
             // Datei speichern
             XLSX.writeFile(wb, "Sitzplan_Boot_Export.xlsx");
         });
+
+        /* --- NUR TISCHE LEEREN (Gäste zurück in Pool) --- */
+        const clearTablesBtn = document.getElementById('clear-tables-btn');
+        
+        if (clearTablesBtn) {
+            clearTablesBtn.addEventListener('click', () => {
+                // Sicherheitsfrage
+                const isSure = confirm("Möchtest du alle Gäste von den Tischen zurück in die Liste legen?\n(Die Namen bleiben erhalten, nur die Zuordnung wird gelöscht.)");
+                
+                if (isSure) {
+                    const pool = document.getElementById('guest-pool');
+                    const allGuestsOnTables = document.querySelectorAll('.guest-on-table');
+                    
+                    // 1. Jeden Gast zurücksetzen
+                    allGuestsOnTables.forEach(guest => {
+                        // In den Pool verschieben
+                        pool.appendChild(guest);
+                        
+                        // Klassen anpassen (Tisch-Look weg, Listen-Look hin)
+                        guest.classList.remove('guest-on-table');
+                        guest.classList.remove('search-match-guest'); // Falls noch markiert
+                        guest.classList.add('guest-item');
+                        guest.style.display = 'flex'; // Sicherstellen, dass er sichtbar ist
+                    });
+
+                    // 2. Tische aufräumen
+                    document.querySelectorAll('.table').forEach(table => {
+                        table.classList.remove('table-full', 'search-match-table', 'locked'); // Auch Sperren aufheben?
+                        // Falls du Sperren behalten willst, lösche 'locked' oben aus der Liste
+                    });
+
+                    // 3. Alles neu berechnen & sortieren
+                    updateCounters();
+                    saveState();
+                }
+            });
+        }
     </script>
 </body>
 </html>
