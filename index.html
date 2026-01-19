@@ -494,6 +494,38 @@
             filter: grayscale(80%);
             transition: opacity 0.3s;
         }
+
+        /* --- ERWEITERTE STATISTIK --- */
+        #stats-box {
+            background: #e3f2fd; /* Ein helles Dashboard-Blau */
+            border: 1px solid #bbdefb;
+            color: #333;
+            padding: 12px;
+            font-size: 13px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            line-height: 1.6;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            padding-bottom: 4px;
+            margin-bottom: 4px;
+        }
+        .stat-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+            margin-bottom: 0;
+        }
+
+        .stat-label { font-weight: normal; color: #555; }
+        .stat-value { font-weight: bold; color: #000; }
+        
+        /* Highlight für "Voll" */
+        .stat-sub { font-size: 11px; color: #666; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -928,56 +960,94 @@
         });
 
         function updateCounters() {
-            // --- OPTIMIERTE SORTIERUNG (Nach Nachname) ---
+            // 1. POOL SORTIEREN (Das Feature von vorhin)
             const pool = document.getElementById('guest-pool');
             const guestsInPool = Array.from(pool.getElementsByClassName('guest-item'));
             
             guestsInPool.sort((a, b) => {
                 const fullA = a.getAttribute('data-name').trim();
                 const fullB = b.getAttribute('data-name').trim();
-                
-                // Trick: Wir nehmen das letzte Wort als Nachnamen
                 const lastA = fullA.split(' ').pop().toLowerCase();
                 const lastB = fullB.split(' ').pop().toLowerCase();
-                
-                // 1. Nach Nachnamen sortieren
                 if (lastA < lastB) return -1;
                 if (lastA > lastB) return 1;
-                
-                // 2. Wenn Nachnamen gleich sind, entscheidet der Vorname
                 return fullA.localeCompare(fullB);
             });
-
-            // Neu einsortieren
             guestsInPool.forEach(guest => pool.appendChild(guest));
-            // ---------------------------------------------
 
+            // 2. DATEN SAMMELN FÜR STATISTIK
             let totalSeats = 0;
             let occupiedSeats = 0;
             
+            // Neue Zähler
+            let countAon = 0;     // Interne
+            let countGuests = 0;  // Externe
+            let fullTables = 0;   // Tische die voll sind
+            let emptyTables = 0;  // Tische die komplett leer sind
+
             document.querySelectorAll('.table').forEach(table => {
                 const container = table.querySelector('.seat-container');
                 const counter = table.querySelector('.seat-counter');
                 const max = parseInt(table.getAttribute('data-max'));
                 const currentCount = container.children.length;
                 
+                // Generelle Zähler
                 totalSeats += max;
                 occupiedSeats += currentCount;
 
-                counter.innerText = currentCount + " / " + max;
+                // Wer sitzt hier? (Aon vs. Gast)
+                const guestsOnTable = container.querySelectorAll('.guest-on-table');
+                guestsOnTable.forEach(g => {
+                    const comp = g.getAttribute('data-company') || "";
+                    // Wir prüfen, ob "aon" im Firmennamen steckt (egal ob groß/klein geschrieben)
+                    if (comp.toLowerCase().includes('aon')) {
+                        countAon++;
+                    } else {
+                        countGuests++;
+                    }
+                });
 
+                // Tisch Status prüfen
                 if (currentCount >= max) {
                     table.classList.add('table-full');
                     counter.style.color = "white"; 
+                    fullTables++;
                 } else {
                     table.classList.remove('table-full');
                     counter.style.color = "white";
+                    if (currentCount === 0) emptyTables++;
                 }
+
+                counter.innerText = currentCount + " / " + max;
             });
             
             const free = totalSeats - occupiedSeats;
-            document.getElementById('stats-box').innerText = 
-                `Belegt: ${occupiedSeats} / ${totalSeats} (Frei: ${free})`;
+
+            // 3. STATISTIK HTML BAUEN
+            const statsHtml = `
+                <div class="stat-row">
+                    <span class="stat-label">Plätze belegt:</span>
+                    <span class="stat-value">${occupiedSeats} / ${totalSeats}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Noch frei:</span>
+                    <span class="stat-value" style="color:${free > 0 ? 'green' : 'red'}">${free}</span>
+                </div>
+                <div style="margin: 8px 0; border-top: 1px solid #ccc;"></div>
+                <div class="stat-row">
+                    <span class="stat-label">🏢 Aon (Intern):</span>
+                    <span class="stat-value">${countAon}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">👤 Gäste (Extern):</span>
+                    <span class="stat-value">${countGuests}</span>
+                </div>
+                <div class="stat-sub">
+                    Tische: ${fullTables} voll / ${emptyTables} leer
+                </div>
+            `;
+
+            document.getElementById('stats-box').innerHTML = statsHtml;
         }
 
         function saveState() {
