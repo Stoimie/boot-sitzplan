@@ -462,6 +462,38 @@
             border: 2px dashed #2196f3 !important;
             background-color: #e3f2fd !important;
         }
+
+        /* --- SUCH-ERGEBNISSE AUF DER KARTE --- */
+        
+        /* 1. Der gefundene Tisch (Goldenes Pulsieren) */
+        @keyframes pulse-gold {
+            0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(255, 193, 7, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
+        }
+
+        .search-match-table {
+            animation: pulse-gold 1.5s infinite; /* Herzschlag-Effekt */
+            border: 3px solid #ffc107 !important; /* Goldener Rand */
+            z-index: 100 !important; /* In den Vordergrund */
+            background-color: rgba(255, 255, 255, 0.9) !important; /* Hell machen */
+        }
+
+        /* 2. Der gefundene Name IM Tisch */
+        .search-match-guest {
+            background-color: #fff9c4 !important; /* Helles Gelb */
+            color: #000 !important;
+            border: 1px solid #fbc02d !important;
+            font-weight: bold;
+        }
+
+        /* 3. Alles andere abdunkeln (Focus-Modus) */
+        /* Wir geben dem Body eine Klasse 'searching', dann werden nicht-betroffene Tische blass */
+        body.searching .table:not(.search-match-table) {
+            opacity: 0.3;
+            filter: grayscale(80%);
+            transition: opacity 0.3s;
+        }
     </style>
 </head>
 <body>
@@ -543,12 +575,57 @@
             if (!loadState()) updateCounters();
         });
 
+        /* --- DIE SUPER-SUCHE (Liste + Karte) --- */
         document.getElementById('search-box').addEventListener('input', (e) => {
-            const term = e.target.value.toLowerCase();
-            const items = pool.querySelectorAll('.guest-item');
-            items.forEach(item => {
-                const text = item.innerText.toLowerCase();
-                item.style.display = text.includes(term) ? 'flex' : 'none';
+            const term = e.target.value.toLowerCase().trim();
+            const poolItems = document.querySelectorAll('#guest-pool .guest-item');
+            const mapGuests = document.querySelectorAll('.guest-on-table');
+            const tables = document.querySelectorAll('.table');
+
+            // 1. Zuerst alles aufräumen (alte Highlights entfernen)
+            document.body.classList.remove('searching');
+            tables.forEach(t => t.classList.remove('search-match-table'));
+            mapGuests.forEach(g => g.classList.remove('search-match-guest'));
+
+            // Wenn Suchfeld leer ist -> Abbruch, alles wieder normal zeigen
+            if (term === "") {
+                poolItems.forEach(item => item.style.display = 'flex');
+                return;
+            }
+
+            // Wir sind im Such-Modus -> Body markieren (für den Dimming-Effekt)
+            document.body.classList.add('searching');
+
+            // 2. Linke Liste filtern (wie früher)
+            poolItems.forEach(item => {
+                const name = item.getAttribute('data-name').toLowerCase();
+                const company = item.getAttribute('data-company').toLowerCase();
+                if (name.includes(term) || company.includes(term)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+
+            // 3. Auf der Karte suchen (NEU!)
+            let foundOnMap = false;
+            mapGuests.forEach(guest => {
+                const name = guest.getAttribute('data-name').toLowerCase();
+                const company = guest.getAttribute('data-company').toLowerCase();
+                
+                if (name.includes(term) || company.includes(term)) {
+                    // Treffer!
+                    foundOnMap = true;
+                    
+                    // Gast markieren
+                    guest.classList.add('search-match-guest');
+                    
+                    // Den zugehörigen Tisch finden und markieren
+                    const parentTable = guest.closest('.table');
+                    if (parentTable) {
+                        parentTable.classList.add('search-match-table');
+                    }
+                }
             });
         });
 
