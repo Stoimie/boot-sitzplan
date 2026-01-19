@@ -321,15 +321,19 @@
 
         /* --- 3. DER "FERTIG"-STATUS (GRÜNES LEUCHTEN) --- */
         /* Diese Klasse fügen wir gleich per Javascript hinzu */
+        /* --- DER "FERTIG"-STATUS (JETZT ROT) --- */
         .table-full {
-            /* Ein grünes Leuchten (Schein nach außen) */
-            box-shadow: 0 0 15px #4caf50, inset 0 0 10px #4caf50 !important; 
-            border: 2px solid #4caf50 !important;
-            background-color: rgba(76, 175, 80, 0.3) !important; /* Transparentes Grün */
+            /* Ein rotes Leuchten (Warnung: Voll!) */
+            box-shadow: 0 0 15px #d32f2f, inset 0 0 10px #d32f2f !important; 
+            border: 2px solid #d32f2f !important;
+            
+            /* Roter Hintergrund-Schimmer */
+            background-color: rgba(211, 47, 47, 0.25) !important; 
+            
             transition: all 0.5s ease; /* Sanfter Übergang */
         }
         
-        /* Damit die Schrift auf dem grünen Kreis gut lesbar bleibt */
+        /* Damit die Schrift auf dem roten Kreis gut lesbar bleibt */
         .table-full .seat-counter {
             color: #fff !important;
             text-shadow: 0 1px 2px rgba(0,0,0,0.8);
@@ -432,6 +436,31 @@
         .table.locked .seat-container {
             opacity: 0.6;
             pointer-events: none; /* Verhindert Klicks auf die Gäste */
+        }
+
+        /* --- DRAG & DROP HIGHLIGHTING --- */
+        
+        /* 1. Ein gültiges Ziel (Freier Tisch) */
+        .drop-valid {
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.8) !important; /* Kräftiges grünes Leuchten */
+            border: 2px solid #4caf50 !important;
+            background-color: rgba(76, 175, 80, 0.15) !important;
+            transform: translate(-50%, -50%) scale(1.05) !important; /* Wird leicht größer */
+            z-index: 500;
+        }
+
+        /* 2. Ein ungültiges Ziel (Voll oder Gesperrt) */
+        .drop-invalid {
+            opacity: 0.3 !important; /* Wird durchsichtig/unwichtig */
+            filter: grayscale(100%) !important; /* Verliert die Farbe */
+            pointer-events: none;
+        }
+
+        /* 3. Der Pool (Sicherer Hafen) */
+        .pool-valid {
+            box-shadow: inset 0 0 15px rgba(33, 150, 243, 0.5) !important;
+            border: 2px dashed #2196f3 !important;
+            background-color: #e3f2fd !important;
         }
     </style>
 </head>
@@ -621,9 +650,38 @@
             if (company) htmlContent += `<div class="guest-company-text">${company}</div>`;
             div.innerHTML = htmlContent;
 
-            div.addEventListener('dragstart', () => { div.classList.add('dragging'); });
+            // --- START DES ZIEHENS (Licht an!) ---
+            div.addEventListener('dragstart', () => { 
+                div.classList.add('dragging'); 
+                
+                // 1. Alle Tische prüfen
+                document.querySelectorAll('.table').forEach(table => {
+                    const isLocked = table.classList.contains('locked');
+                    const isFull = table.classList.contains('table-full');
+                    
+                    // Wenn Tisch offen UND nicht voll -> Grün leuchten
+                    if (!isLocked && !isFull) {
+                        table.classList.add('drop-valid');
+                    } else {
+                        // Sonst -> Ausgrauen
+                        table.classList.add('drop-invalid');
+                    }
+                });
+
+                // 2. Pool auch beleuchten (als Rückzugsort)
+                document.getElementById('guest-pool').classList.add('pool-valid');
+            });
+
+            // --- ENDE DES ZIEHENS (Licht aus!) ---
             div.addEventListener('dragend', () => { 
                 div.classList.remove('dragging'); 
+                
+                // Alle Spezial-Klassen wieder entfernen
+                document.querySelectorAll('.table').forEach(table => {
+                    table.classList.remove('drop-valid', 'drop-invalid');
+                });
+                document.getElementById('guest-pool').classList.remove('pool-valid');
+
                 handleDragEnd(div);
             });
 
